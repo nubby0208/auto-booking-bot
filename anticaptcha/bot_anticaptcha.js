@@ -834,8 +834,9 @@ const onClickTnc = async (index) => {
   console.log("bot get ticket");
 };
 
+
 const goToStep3 = async (index, carIndex, dataObject) => {
-  var data = json2array(dataObject);
+  var data = json2array(dataObject[carIndex]);
 
   const selectDate = async (day) => {
     try {
@@ -855,14 +856,16 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       console.error("Could not select date!");
     }
   };
-
+  
   while (true) {
     //step 1
     while (true) {
       let passFlag = 0;
       try {
-        const elementHandle = await pages[index].waitForSelector("#readFlag1");
-        await elementHandle.click();
+        let elementHandle = await pages[index].waitForSelector("#readFlag1");
+        if(!await (await elementHandle.getProperty('checked')).jsonValue()){
+          await elementHandle.click();
+        }
         passFlag = 1;
       } catch (e) {
         console.log("not found check-box in step1");
@@ -870,6 +873,7 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       if (passFlag === 1) break;
     }
 
+    
     let taskSolution = task_solutions[index];
     if (!taskSolution) taskSolution = await reCaptcha();
 
@@ -878,10 +882,7 @@ const goToStep3 = async (index, carIndex, dataObject) => {
         `document.getElementById("g-recaptcha-response").innerHTML="${taskSolution}";`
       );
     } catch (err) {
-      taskSolution = await reCaptcha();
-      await pages[index].evaluate(
-        `document.getElementById("g-recaptcha-response").innerHTML="${taskSolution}";`
-      );
+      
     }
 
     const carNumber = data[4];
@@ -895,6 +896,7 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       const elementHandle = await pages[index].waitForSelector(
         "#registrationMark"
       );
+      await elementHandle.click({ clickCount: 2 })
       await elementHandle.type(carNumber);
     } catch (e) {
       console.error("could not type car number!");
@@ -908,6 +910,7 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       const elementHandle = await pages[index].waitForSelector(
         "#registrationMarkAgain"
       );
+      await elementHandle.click({ clickCount: 2 })
       await elementHandle.type(carNumber);
     } catch (e) {
       console.error("could not retype car number!");
@@ -916,34 +919,34 @@ const goToStep3 = async (index, carIndex, dataObject) => {
 
     await Promise.all([
       pages[index].click(`.continueBtn`),
-      pages[index].waitForNavigation().catch(() => { }),
+      // pages[index].waitForNavigation().catch(() => { }),
     ]);
 
 
     //pass or no
     //step2
-    let elementClassName = "";
+    let elementInnerHTML = "";
     while (true) {
       let passFlag = 0;
       try {
         let element2 = await pages[index].waitForSelector(
           ".long_step_hd .step_no"
         ); // select the element
-        elementClassName = await element2.evaluate((el) => el.className);
+        elementInnerHTML = await element2.evaluate((el) => el.innerHTML);
         passFlag = 1;
-      } catch (e) {        
-        const elementHandle = "#errorMessage .errormsg";
-        const err = await pages[index].$eval(elementHandle, (element) => {
-          return element.innerHTML
-        });
-        console.log(err);
+        console.log('checking step1 is done..')
+      } catch (e) {
+        
       }
       if (passFlag === 1) break;
     }
 
-    if (elementClassName === "step_no") {
+    if (elementInnerHTML === "Step 2") {
+      await delay(1000)
       await selectDate(data[1]);
+      await delay(800)
       await selectDate(data[2]);
+      await delay(800)
       await selectDate(data[3]);
       await delay(2000)
       try {
@@ -983,7 +986,7 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       }
 
       if (elementClassName3 === "step_no") {
-        await onStep3(index, dataObject);
+        await onStep3(index, dataObject[carIndex]);
         await onStep4(index, data);
         await onStep5(index, data);
         break;
@@ -994,6 +997,40 @@ const goToStep3 = async (index, carIndex, dataObject) => {
         await onTypePin(index, data[12]);
         await onClickTnc(index);
         break;
+      }
+      carIndex ++;
+        if(dataObject.length !== carIndex){
+          console.log('inputing next car info')
+          await goToStep3(index, carIndex, dataObject)
+      }else{
+        console.log('end of cars')
+        return;
+      }
+    }else{
+      //step1 error
+      let elementInnerHTML = await pages[index].evaluate(() => {
+        let scripts = document.querySelectorAll('#errorMessage .errormsg');
+        let result = '';
+        scripts.forEach(script => {
+          result += script.innerHTML;
+        })
+        return result;
+      })
+      
+console.log(elementInnerHTML)
+      if(elementInnerHTML.includes('registered')||elementInnerHTML.includes('in process')){
+        carIndex ++;
+        if(dataObject.length !== carIndex){
+          console.log('inputing next car info')
+          await goToStep3(index, carIndex, dataObject)
+        }else{
+          console.log('end of cars')
+          return;
+        }
+      }else{
+        console.log('inputing info again')
+        await goToStep3(index, carIndex, dataObject)
+        return;
       }
     }
   }
@@ -1308,7 +1345,7 @@ const scraper = async () => {
   const csv = require("csvtojson/v2");
   carInfoCsv = await csv().fromFile("../csv/applications2.csv");
   let index = 0;
-  startPerBot(index, carInfoCsv[index]);
+  startPerBot(index, carInfoCsv);
 };
 
 const startBotFunction = async () => {
