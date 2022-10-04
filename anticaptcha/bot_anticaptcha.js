@@ -931,8 +931,12 @@ const goToStep3 = async (index, carIndex, dataObject) => {
         ); // select the element
         elementClassName = await element2.evaluate((el) => el.className);
         passFlag = 1;
-      } catch (e) {
-        console.log("not found application.step2 in step2");
+      } catch (e) {        
+        const elementHandle = "#errorMessage .errormsg";
+        const err = await pages[index].$eval(elementHandle, (element) => {
+          return element.innerHTML
+        });
+        console.log(err);
       }
       if (passFlag === 1) break;
     }
