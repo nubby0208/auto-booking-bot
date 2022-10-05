@@ -666,13 +666,15 @@ function reCaptcha() {
     anticaptcha.setUserAgent(
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116"
     );
+    anticaptcha.setProxyAddress("196.51.37.45");
+    anticaptcha.setProxyPort(8800);
     // check balance first
     anticaptcha.getBalance(function (err, balance) {
       if (err) {
         resolve({});
       }
       if (balance > 0) {
-        anticaptcha.createTaskProxyless(function (err, taskId) {
+        anticaptcha.createTaskProxy(function (err, taskId) {
           if (err) {
             resolve({});
           }
@@ -1346,7 +1348,6 @@ const scraper = async () => {
 };
 
 const startBotFunction = async () => {
-
   let moment = new Date();
   fileName = 'file-' + moment.getMilliseconds() + '.csv';
   await fs.writeFile(fileName, fields.join(','), function (err) {
@@ -1354,19 +1355,13 @@ const startBotFunction = async () => {
     console.log('file saved');
   });
 
-
-
   try {
-
     console.log(" bot started working ");
     scraper();
   } catch (err) {
     console.log("bot crashed, heres why ");
     console.log(err);
   }
-
-
-
 };
 
 startBotFunction();

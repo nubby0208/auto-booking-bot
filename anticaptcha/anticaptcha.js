@@ -97,6 +97,10 @@ var Anticaptcha = function (clientKey) {
       this.createTask(cb, 'NoCaptchaTaskProxyless')
     }
 
+    this.createTaskProxy = function (cb) {
+      this.createTask(cb, 'NoCaptchaTask')
+    }
+
     this.createHCaptchaTaskProxyless = function (cb) {
       this.createTask(cb, 'HCaptchaTaskProxyless')
     }
