@@ -836,7 +836,7 @@ const onClickTnc = async (index) => {
 
 
 const goToStep3 = async (index, carIndex, dataObject) => {
-  var data = json2array(dataObject[carIndex]);
+
 
   const selectDate = async (day) => {
     try {
@@ -856,24 +856,27 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       console.error("Could not select date!");
     }
   };
-  
+
   while (true) {
+    var data = json2array(dataObject[carIndex]);
+
     //step 1
     while (true) {
       let passFlag = 0;
       try {
         let elementHandle = await pages[index].waitForSelector("#readFlag1");
-        if(!await (await elementHandle.getProperty('checked')).jsonValue()){
+        if (!await (await elementHandle.getProperty('checked')).jsonValue()) {
           await elementHandle.click();
         }
         passFlag = 1;
       } catch (e) {
+        passFlag = 1;
         console.log("not found check-box in step1");
       }
       if (passFlag === 1) break;
     }
 
-    
+
     let taskSolution = task_solutions[index];
     if (!taskSolution) taskSolution = await reCaptcha();
 
@@ -882,7 +885,7 @@ const goToStep3 = async (index, carIndex, dataObject) => {
         `document.getElementById("g-recaptcha-response").innerHTML="${taskSolution}";`
       );
     } catch (err) {
-      
+
     }
 
     const carNumber = data[4];
@@ -915,17 +918,18 @@ const goToStep3 = async (index, carIndex, dataObject) => {
     } catch (e) {
       console.error("could not retype car number!");
     }
-    await delay(2500)
 
-    await Promise.all([
+
+    
+
+    Promise.all([
       pages[index].click(`.continueBtn`),
-      // pages[index].waitForNavigation().catch(() => { }),
-    ]);
-
-
+      pages[index].waitForNavigation().catch(() => { }),
+    ])
     //pass or no
     //step2
-    let elementInnerHTML = "";
+
+    let elementInnerHTML;
     while (true) {
       let passFlag = 0;
       try {
@@ -934,9 +938,9 @@ const goToStep3 = async (index, carIndex, dataObject) => {
         ); // select the element
         elementInnerHTML = await element2.evaluate((el) => el.innerHTML);
         passFlag = 1;
-        console.log('checking step1 is done..')
+        console.log('checking step1 is done..', elementInnerHTML)
       } catch (e) {
-        
+        console.log('step1 is not done')
       }
       if (passFlag === 1) break;
     }
@@ -986,61 +990,54 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       }
 
       if (elementClassName3 === "step_no") {
-        await onStep3(index, dataObject[carIndex]);
+        await onStep3(index, data);
         await onStep4(index, data);
         await onStep5(index, data);
         break;
       }
 
-      if (isAccountPage == true) {
-        await onTypeAccountNo(index, data[11]);
-        await onTypePin(index, data[12]);
-        await onClickTnc(index);
-        break;
-      }
-      carIndex ++;
-        if(dataObject.length !== carIndex){
-          console.log('inputing next car info')
-          await goToStep3(index, carIndex, dataObject)
-      }else{
-        console.log('end of cars')
-        return;
-      }
-    }else{
+      // if (isAccountPage == true) {
+      //   await onTypeAccountNo(index, data[11]);
+      //   await onTypePin(index, data[12]);
+      //   await onClickTnc(index);
+      //   break;
+      // }
+      // carIndex++;
+      // if (dataObject.length !== carIndex) {
+      //   console.log('inputing next car info')
+      //   await goToStep3(index, carIndex, dataObject)
+      // } else {
+      //   console.log('end of cars')
+      //   return;
+      // }
+    } else if(elementInnerHTML === "Step 1"){
+      console.log('getting errormsg')
       //step1 error
-      let elementInnerHTML = await pages[index].evaluate(() => {
+      let errormsg = 'no error';
+      try{
+        errormsg = await pages[index].evaluate(() => {
         let scripts = document.querySelectorAll('#errorMessage .errormsg');
         let result = '';
         scripts.forEach(script => {
           result += script.innerHTML;
         })
         return result;
-      })
-      
-console.log(elementInnerHTML)
-      if(elementInnerHTML.includes('registered')||elementInnerHTML.includes('in process')){
-        carIndex ++;
-        if(dataObject.length !== carIndex){
+      })}catch{}
+
+      console.log(errormsg)
+      carIndex++;
+        if (dataObject.length !== carIndex) {
           console.log('inputing next car info')
-          await goToStep3(index, carIndex, dataObject)
-        }else{
+        } else {
           console.log('end of cars')
-          return;
+          return
         }
-      }else{
-        console.log('inputing info again')
-        await goToStep3(index, carIndex, dataObject)
-        return;
-      }
     }
   }
 };
 
-const onStep3 = async (index, dataObject) => {
+const onStep3 = async (index, data) => {
   console.log("bot enter step3");
-
-  let data = json2array(dataObject);
-
 
   const elementHandle = ".contentpage .contenttable .contentRow2:nth-child(4) .display_field_bold.col-50-right";
   success_stories[index] = {};
@@ -1360,7 +1357,7 @@ const startBotFunction = async () => {
 
 
   try {
-    
+
     console.log(" bot started working ");
     scraper();
   } catch (err) {
