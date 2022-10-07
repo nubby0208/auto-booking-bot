@@ -1,9 +1,9 @@
 // start time setting.
-const start_hours = 6,
-  minutes = 06,
+const start_hours = 0,
+  minutes = 00,
   seconds = 00;
-const end_hours = 19,
-  end_minutes = 15,
+const end_hours = 24,
+  end_minutes = 00,
   end_seconds = 00;
 const delay_captcha = 2;
 const console_mode = false;
@@ -34,6 +34,21 @@ let browsers = [];
 let pages = [];
 
 let task_solutions = [];
+
+let success_stories = [];
+let fileName = '';
+
+const ReadWriteLock = require('rwlock');
+
+const lock = new ReadWriteLock();
+const { Parser } = require('json2csv');
+const fields = [
+  'Engine Type',
+  'App Reference Number',
+  'Car Number',
+];
+let json2csvParser = new Parser({ fields });
+const fs = require('fs');
 
 const options = { width: 1080, height: 720 };
 const config = {
@@ -638,7 +653,7 @@ function reCaptcha() {
   return new Promise(async (resolve, reject) => {
     //recaptcha
     let anticaptcha = require("./anticaptcha")(
-      "08f4f4b0d12524c3d8f1d521479b4fa2"
+      "b9ab2c0e965ad4fded7ebb943a7dd070"
     );
     const project_config = require("./config.json");
     //recaptcha key from target website
@@ -651,13 +666,15 @@ function reCaptcha() {
     anticaptcha.setUserAgent(
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116"
     );
+    anticaptcha.setProxyAddress("196.51.37.45");
+    anticaptcha.setProxyPort(8800);
     // check balance first
     anticaptcha.getBalance(function (err, balance) {
       if (err) {
         resolve({});
       }
       if (balance > 0) {
-        anticaptcha.createTaskProxyless(function (err, taskId) {
+        anticaptcha.createTaskProxy(function (err, taskId) {
           if (err) {
             resolve({});
           }
@@ -735,7 +752,7 @@ const goToMain = async (index) => {
   while (true) {
     try {
       // await pages[index].click("#makeNewApplication");
-      await pages[index].click(".contenttable tr:nth-of-type(3) a");
+      await pages[index].click(".contenttable tr:nth-of-type(1) a");
       while (true) {
         await delay(500);
         let checkMakeNew = await pages[index].evaluate(() => {
@@ -795,31 +812,8 @@ const goToMain = async (index) => {
   await pages[index].click(".continueBtn");
 };
 
-const onClickTnc = async (index) => {
-  try {
-    const elementHandle = await pages[index].waitForSelector(
-      'input[name="TNC"]',
-      {
-        visible: true,
-      }
-    );
-    await elementHandle.click();
-  } catch (err) {
-    console.log("Don't Find, bot is trying to find #TNC");
-  }
-
-  // await pages[index].waitForTimeout(200)
-  await pages[index].click("#submitBut").catch(
-    async () =>
-      await pages[index].click("#submitBut").catch((e) => {
-        console.error("Please click continue button", e);
-      })
-  );
-  console.log("bot get ticket");
-};
-
 const goToStep3 = async (index, carIndex, dataObject) => {
-  var data = json2array(dataObject);
+
 
   const selectDate = async (day) => {
     try {
@@ -841,21 +835,26 @@ const goToStep3 = async (index, carIndex, dataObject) => {
   };
 
   while (true) {
+    var data = json2array(dataObject[carIndex]);
+
     //step 1
     while (true) {
       let passFlag = 0;
       try {
-        const elementHandle = await pages[index].waitForSelector("#readFlag1");
-        await elementHandle.click();
+        let elementHandle = await pages[index].waitForSelector("#readFlag1");
+        if (!await (await elementHandle.getProperty('checked')).jsonValue()) {
+          await elementHandle.click();
+        }
         passFlag = 1;
       } catch (e) {
+        passFlag = 1;
         console.log("not found check-box in step1");
       }
       if (passFlag === 1) break;
     }
 
+
     let taskSolution = task_solutions[index];
-    console.log(taskSolution);
     if (!taskSolution) taskSolution = await reCaptcha();
 
     try {
@@ -863,13 +862,10 @@ const goToStep3 = async (index, carIndex, dataObject) => {
         `document.getElementById("g-recaptcha-response").innerHTML="${taskSolution}";`
       );
     } catch (err) {
-      taskSolution = await reCaptcha();
-      await pages[index].evaluate(
-        `document.getElementById("g-recaptcha-response").innerHTML="${taskSolution}";`
-      );
+
     }
 
-    const carNumber = data[0];
+    const carNumber = data[4];
     console.log(carNumber);
 
     try {
@@ -880,10 +876,12 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       const elementHandle = await pages[index].waitForSelector(
         "#registrationMark"
       );
+      await elementHandle.click({ clickCount: 2 })
       await elementHandle.type(carNumber);
     } catch (e) {
       console.error("could not type car number!");
     }
+    await delay(2000)
 
     try {
       // await pages[index].evaluate(() => {
@@ -892,44 +890,53 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       const elementHandle = await pages[index].waitForSelector(
         "#registrationMarkAgain"
       );
+      await elementHandle.click({ clickCount: 2 })
       await elementHandle.type(carNumber);
     } catch (e) {
       console.error("could not retype car number!");
     }
 
-    await Promise.all([
-      pages[index].click(`.continueBtn`),
-      pages[index].waitForNavigation(),
-    ]);
 
+    
+
+    Promise.all([
+      pages[index].click(`.continueBtn`),
+      pages[index].waitForNavigation().catch(() => { }),
+    ])
     //pass or no
     //step2
-    let elementClassName = "";
+
+    let elementInnerHTML;
     while (true) {
       let passFlag = 0;
       try {
         let element2 = await pages[index].waitForSelector(
           ".long_step_hd .step_no"
         ); // select the element
-        elementClassName = await element2.evaluate((el) => el.className);
+        elementInnerHTML = await element2.evaluate((el) => el.innerHTML);
         passFlag = 1;
+        console.log('checking step1 is done..', elementInnerHTML)
       } catch (e) {
-        console.log("not found application.step2 in step2");
+        console.log('step1 is not done')
       }
       if (passFlag === 1) break;
     }
 
-    if (elementClassName === "step_no") {
-      await selectDate(data[16]);
-      await selectDate(data[17]);
-      await selectDate(data[18]);
+    if (elementInnerHTML === "Step 2") {
+      await delay(1000)
+      await selectDate(data[1]);
+      await delay(800)
+      await selectDate(data[2]);
+      await delay(800)
+      await selectDate(data[3]);
+      await delay(2000)
       try {
         console.log("Clicking continue button...");
         await pages[index]
           .waitForSelector(".contenttable_button #actionBtnContinue")
           .then((x) => x.click());
       } catch (e) {
-        console.error("Could not click continue button!");
+
       }
 
       let elementClassName3 = "";
@@ -960,9 +967,9 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       }
 
       if (elementClassName3 === "step_no") {
-        await onStep3(index, dataObject);
-        await onStep4(index);
-        await onStep5(index);
+        await onStep3(index, data);
+        await onStep4(index, data);
+        await onStep5(index, data);
         break;
       }
 
@@ -972,23 +979,59 @@ const goToStep3 = async (index, carIndex, dataObject) => {
         await onClickTnc(index);
         break;
       }
+      // carIndex++;
+      // if (dataObject.length !== carIndex) {
+      //   console.log('inputing next car info')
+      //   await goToStep3(index, carIndex, dataObject)
+      // } else {
+      //   console.log('end of cars')
+      //   return;
+      // }
+    } else if(elementInnerHTML === "Step 1"){
+      console.log('getting errormsg')
+      //step1 error
+      let errormsg = 'no error';
+      try{
+        errormsg = await pages[index].evaluate(() => {
+        let scripts = document.querySelectorAll('#errorMessage .errormsg');
+        let result = '';
+        scripts.forEach(script => {
+          result += script.innerHTML;
+        })
+        return result;
+      })}catch{}
+
+      console.log(errormsg)
+      carIndex++;
+        if (dataObject.length !== carIndex) {
+          console.log('inputing next car info')
+        } else {
+          console.log('end of cars')
+          return
+        }
     }
   }
 };
-const onStep3 = async (index, dataObject) => {
+
+const onStep3 = async (index, data) => {
   console.log("bot enter step3");
 
-  let data = json2array(dataObject);
-  await onTypeApplicantName(index, data[1]);
-  await onTypeAddressFlatRoom(index, data[2]);
-  await onTypeAddressFloor(index, data[3]);
-  await onTypeAddressBlock(index, data[4]);
-  await onTypeAddressBldgEstate(index, data[5]);
-  await onTypeAddressStreet(index, data[6]);
-  await onSelectAddressArea(index, data[7]);
-  await onSelectAddressDistrict(index, data[8]);
-  await onTypeTelNo(index, data[9]);
-  await onTypeApplicantEmailAddr(index, data[10]);
+  const elementHandle = ".contentpage .contenttable .contentRow2:nth-child(4) .display_field_bold.col-50-right";
+  success_stories[index] = {};
+  success_stories[index]['engine_type'] = await pages[index].$eval(elementHandle, (element) => {
+    return element.innerHTML
+  });
+
+  await onTypeApplicantName(index, data[5]);
+  await onTypeAddressFlatRoom(index, data[6]);
+  await onTypeAddressFloor(index, data[7]);
+  await onTypeAddressBlock(index, data[8]);
+  await onTypeAddressBldgEstate(index, data[9]);
+  await onTypeAddressStreet(index, data[10]);
+  await onSelectAddressArea(index, data[11]);
+  await onSelectAddressDistrict(index, data[12]);
+  await onTypeTelNo(index, data[13]);
+  await onTypeApplicantEmailAddr(index, data[14]);
   await onClickBtn(index);
 };
 const onTypeApplicantName = async (index, applicantNameEng) => {
@@ -1137,7 +1180,7 @@ const onClickBtn = async (index) => {
   );
 };
 
-const onStep4 = async (index) => {
+const onStep4 = async (index, data) => {
   try {
     const elementHandle = await pages[index].waitForSelector(
       "#declarationFlag"
@@ -1146,7 +1189,6 @@ const onStep4 = async (index) => {
   } catch (err) {
     console.log("Don't Find, bot is trying to find #declarationFlag");
   }
-
   // await pages[index].waitForTimeout(200)
   const elementHandle = ".continueBtn";
   await pages[index]
@@ -1154,7 +1196,7 @@ const onStep4 = async (index) => {
     .then(() =>
       Promise.all([
         pages[index].click(elementHandle),
-        pages[index].waitForNavigation().catch(() => {}),
+        pages[index].waitForNavigation().catch(() => { }),
       ])
     )
     .catch(
@@ -1164,53 +1206,68 @@ const onStep4 = async (index) => {
         })
     );
 };
-const onStep5 = async (index) => {
+const onStep5 = async (index, data) => {
   try {
-    const elementHandle = "#commitform";
-    await pages[index]
-      .waitForSelector(elementHandle)
-      .then((x) =>
-        Promise.all([
-          pages[index].waitForNavigation().catch(() => {}),
-          x.click(),
-        ])
-      );
-    // await pages[index].click(elementHandle);
+    const elementHandle = ".contenttable .contentRow:nth-child(4)";
+
+    let appRefNumber = await pages[index].$eval(elementHandle, (element) => {
+      return element.innerHTML
+    });
+
+    let regex = /&(nbsp|amp|quot|lt|gt);/g;
+
+    success_stories[index]['app_ref_number'] = appRefNumber.split(':')[1].replace(regex, " ");
+
+    success_stories[index]['registration_mark'] = data[4];
+    console.log(success_stories[index]['app_ref_number'])
+
+    json2csvParser = new Parser({ header: false });
+    let csv = json2csvParser.parse(success_stories[index]);
+    lock.writeLock(function (release) {
+      // do stuff
+      fs.appendFile(fileName, '\r\n' + csv, function (err) {
+        if (err) throw err;
+        console.log('Saved!');
+      });
+      release();
+    });
+
   } catch (err) {
     console.log("Don't Find, bot is trying to find #commitform");
   }
 
-  while (true) {
-    let passFlag = 0;
-    try {
-      await pages[index].evaluate(() => {
-        let test = document.querySelector(
-          ".contenttable>.row>.tableLayout:last-child>.rightText>label:nth-child(3)>input"
-        );
-        test.click();
-      });
-      passFlag = 1;
-    } catch (e) {
-      console.log("not found pps in payment1 page : ", e);
-    }
-    if (passFlag === 1) {
-      break;
-    }
-  }
-  // await pages[index].waitForTimeout(200)
 
-  const elementHandle = ".submitBtn";
-  await pages[index]
-    .waitForSelector(elementHandle)
-    .then((x) =>
-      Promise.all([pages[index].waitForNavigation().catch(() => {}), x.click()])
-    )
-    .catch(
-      async () =>
-        await pages[index].click(".submitBtn_hover").catch((e) => {
-          console.error("Please click continue button", e);
-        })
-    );
+  // while (true) {
+  //   let passFlag = 0;
+  //   try {
+  //     await pages[index].evaluate(() => {
+  //       let test = document.querySelector(
+  //         ".contenttable>.row>.tableLayout:last-child>.rightText>label:nth-child(3)>input"
+  //       );
+  //       test.click();
+  //     });
+  //     passFlag = 1;
+  //   } catch (e) {
+  //     console.log("not found pps in payment1 page : ", e);
+  //   }
+  //   if (passFlag === 1) {
+  //     break;
+  //   }
+  // }
+  // // await pages[index].waitForTimeout(200)
+
+  // const elementHandle = ".submitBtn";
+  // await pages[index]
+  //   .waitForSelector(elementHandle)
+  //   .then((x) =>
+  //     Promise.all([pages[index].waitForNavigation().catch(() => { }), x.click()])
+  //   )
+  //   .catch(
+  //     async () =>
+  //       await pages[index].click(".submitBtn_hover").catch((e) => {
+  //         console.error("Please click continue button", e);
+  //       })
+  //   );
   // await pages[index].click(elementHandle);
   // await pages[index].click(elementHandle);
 };
@@ -1234,6 +1291,29 @@ const onTypePin = async (index, pin) => {
   } catch (err) {
     console.log("Don't Find, bot is trying to find #PIN");
   }
+};
+const onClickTnc = async (index) => {
+  try {
+    const elementHandle = await pages[index].waitForSelector(
+      'input[name="TNC"]',
+      {
+        visible: true,
+      }
+    );
+    await elementHandle.click();
+  } catch (err) {
+    console.log("Don't Find, bot is trying to find #TNC");
+  }
+
+  await pages[index].waitForTimeout(200)
+
+  await pages[index].click("#submitBut").catch(
+    async () =>
+      await pages[index].click("#submitBut").catch((e) => {
+        console.error("Please click continue button", e);
+      })
+  );
+  console.log("bot get ticket");
 };
 
 const getSolutions = async () => {
@@ -1260,13 +1340,19 @@ const startPerBot = async (i, data) => {
 
 const scraper = async () => {
   const csv = require("csvtojson/v2");
-  carInfoCsv = await csv().fromFile("../csv/cars.csv");
-  for (let i = 0; i < carInfoCsv.length; i++) {
-    startPerBot(i, carInfoCsv[i]);
-  }
+  carInfoCsv = await csv().fromFile("../csv/applications1.csv");
+  let index = 0;
+  startPerBot(index, carInfoCsv);
 };
 
 const startBotFunction = async () => {
+  let moment = new Date();
+  fileName = 'file-' + moment.getMilliseconds() + '.csv';
+  await fs.writeFile(fileName, fields.join(','), function (err) {
+    if (err) throw err;
+    console.log('file saved');
+  });
+
   try {
     console.log(" bot started working ");
     scraper();
