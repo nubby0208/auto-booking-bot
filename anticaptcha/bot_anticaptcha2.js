@@ -823,6 +823,44 @@ const goToStep3 = async (index, carIndex, dataObject) => {
       pages[index].click(`.continueBtn`),
       pages[index].waitForNavigation().catch(() => { }),
     ])
+
+    Promise.all([
+      pages[index].click(`#payRef`),
+      pages[index].waitForNavigation().catch(() => { }),
+    ])
+
+    while (true) {
+      let passFlag = 0;
+      try {
+        let elementHandle = await pages[index].waitForSelector("#01,PPSB,PPS");
+        await elementHandle.click();
+        passFlag = 1;
+      } catch (e) {
+        console.log("not found check-box in step1");
+      }
+      if (passFlag === 1) break;
+    }
+    
+    Promise.all([
+      pages[index].click(`.continueBtn`),
+      pages[index].waitForNavigation().catch(() => { }),
+    ])
+
+
+    let isAccountPage = true;
+
+      try {
+        await pages[index].waitForSelector('input[name="ACCOUNTNO"]');
+      } catch (e) {
+        isAccountPage = false;
+      }
+
+    if (isAccountPage == true) {
+      await onTypeAccountNo(index, data[11]);
+      await onTypePin(index, data[12]);
+      await onClickTnc(index);
+      break;
+    }
     break;
 
   }
